@@ -1,0 +1,42 @@
+/* Reset margins and padding */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Set theme colors for body */
+body {
+  @apply bg-white dark:bg-gray-900;
+  @apply text-gray-900 dark:text-gray-100;
+}
+
+/* Remove default focus outline and add custom one */
+:focus {
+  outline: none;
+  @apply ring-2 ring-blue-500 ring-opacity-50;
+}
+
+/* Improve scrollbar appearance */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-600;
+  @apply rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-500;
+}
+
+/* Button styles */
+button {
+  @apply transition-colors duration-150;
+}
