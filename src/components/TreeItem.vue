@@ -43,8 +43,9 @@
 
       <!-- Right part: actions -->
       <div class="flex items-center gap-1">
-        <!-- Delete button -->
+        <!-- Delete button - 在只读模式下隐藏 -->
         <button 
+          v-show="!githubStore.isReadonly"
           class="opacity-0 group-hover:opacity-100 p-1 rounded text-gray-400
                  hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10
                  transition-all duration-200"
@@ -74,6 +75,7 @@ import { computed, ref, nextTick } from 'vue'
 import type { FileItem } from '../stores/files'
 import { useFileStore, FileStatus } from '../stores/files'
 import { useNotificationStore } from '../stores/notification'
+import { useGithubStore } from '../stores/github'
 
 const props = defineProps<{
   item: FileItem
@@ -87,6 +89,7 @@ const emit = defineEmits<{
 const isExpanded = ref(true) // 默认展开
 const fileStore = useFileStore()
 const notificationStore = useNotificationStore()
+const githubStore = useGithubStore()
 
 const isFolder = computed(() => props.item.type === 'tree')
 const isCurrentFile = computed(() => fileStore.currentFile?.id === props.item.id)

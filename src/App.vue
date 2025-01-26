@@ -1,43 +1,30 @@
 <template>
   <div class="h-screen dark:bg-gray-900 overflow-hidden">
-    <template v-if="githubStore.isConfigured">
-      <div class="h-full flex flex-col">
-        <Header class="border-b" />
-        <div class="flex flex-1">
-          <div class="relative border-r dark:border-gray-700" :style="{ width: `${sidebarWidth}px`, flexShrink: 0 }">
-            <FileTree :onSelect="handleSelect" />
-            <ResizeHandle @resize="handleResize" />
-          </div>
-          <div class="flex-1 relative">
-            <template v-if="fileStore.showDiff">
-              <DiffEditor
-                :original-content="fileStore.currentFile?.originalContent || ''"
-                :modified-content="fileStore.currentFile?.content || ''"
-                :file-path="fileStore.currentFile?.path || ''"
-                @change="handleEditorChange"
-              />
-            </template>
-            <template v-else>
-              <Editor 
-                :content="fileStore.currentFile?.content || ''"
-                @change="handleEditorChange"
-              />
-            </template>
-          </div>
+    <div class="h-full flex flex-col">
+      <Header class="border-b" />
+      <div class="flex flex-1">
+        <div class="relative border-r dark:border-gray-700" :style="{ width: `${sidebarWidth}px`, flexShrink: 0 }">
+          <FileTree :onSelect="handleSelect" />
+          <ResizeHandle @resize="handleResize" />
+        </div>
+        <div class="flex-1 relative">
+          <template v-if="fileStore.showDiff">
+            <DiffEditor
+              :original-content="fileStore.currentFile?.originalContent || ''"
+              :modified-content="fileStore.currentFile?.content || ''"
+              :file-path="fileStore.currentFile?.path || ''"
+              @change="handleEditorChange"
+            />
+          </template>
+          <template v-else>
+            <Editor 
+              :content="fileStore.currentFile?.content || ''"
+              @change="handleEditorChange"
+            />
+          </template>
         </div>
       </div>
-    </template>
-    <template v-else>
-      <div class="h-full flex items-center justify-center">
-        <div class="w-96">
-          <div class="flex items-center justify-center mb-4">
-            <div class="i-carbon-settings text-3xl mr-2 dark:text-gray-200" />
-            <h2 class="text-xl font-bold text-center dark:text-gray-200">GitHub 配置</h2>
-          </div>
-          <Settings />
-        </div>
-      </div>
-    </template>
+    </div>
     <Toast />
     <Dialog />
   </div>
@@ -46,8 +33,8 @@
 <script setup lang="ts">
 import FileTree from './components/FileTree.vue'
 import Editor from './components/Editor.vue'
-import Settings from './components/Settings.vue'
 import Header from './components/Header.vue'
+import { ref } from 'vue'
 import { onMounted } from 'vue'
 import { useDark } from '@vueuse/core'
 import { useGithubStore } from './stores/github'

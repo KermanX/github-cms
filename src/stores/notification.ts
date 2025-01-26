@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export interface Dialog {
+  hidden?: boolean
   title: string
   message: string
   type: 'info' | 'warning' | 'error' | 'success'
@@ -26,7 +27,7 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   const hideDialog = () => {
-    dialog.value = null
+    dialog.value && (dialog.value.hidden = true)
   }
 
   const showToast = (toastConfig: Toast) => {

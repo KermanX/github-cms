@@ -4,7 +4,8 @@
     <div class="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800">
       <div class="flex justify-between items-center mb-4">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Files</h3>
-        <div class="flex gap-2">
+        <!-- 在只读模式下隐藏新建按钮 -->
+        <div v-if="!githubStore.isReadonly" class="flex gap-2">
           <button 
             class="p-1.5 rounded text-gray-600 dark:text-gray-400 transition-colors
                   hover:bg-gray-200/30 dark:hover:bg-gray-700/30"
@@ -69,8 +70,8 @@
       </div>
     </div>
     
-    <!-- 版本控制部分 -->
-    <div class="h-64 border-t dark:border-gray-700">
+    <!-- 版本控制部分 - 只读模式下隐藏 -->
+    <div v-if="!githubStore.isReadonly" class="h-64 border-t dark:border-gray-700">
       <VersionControl />
     </div>
   </div>

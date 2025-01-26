@@ -1,42 +1,27 @@
+/// <reference types="vite/client" />
+
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
 import { useFileStore } from './files'
 
 export const useGithubStore = defineStore('github', () => {
-  // 使用 ref 存储状态，方便持久化
-  const username = ref(localStorage.getItem('github_username') || '')
-  const repository = ref(localStorage.getItem('github_repository') || '')
+  const username = import.meta.env.VITE_GITHUB_USERNAME
+  const repository = import.meta.env.VITE_GITHUB_REPO
   const token = ref(localStorage.getItem('github_token') || '')
-
-  // 更新方法
-  const setUsername = (newUsername: string) => {
-    username.value = newUsername
-    localStorage.setItem('github_username', newUsername)
-  }
-
-  const setRepository = (newRepository: string) => {
-    repository.value = newRepository
-    localStorage.setItem('github_repository', newRepository)
-  }
 
   const setToken = (newToken: string) => {
     token.value = newToken
     localStorage.setItem('github_token', newToken)
   }
 
-  // 清除所有 GitHub 相关数据
   const clearGithubData = () => {
-    username.value = ''
-    repository.value = ''
     token.value = ''
-    localStorage.removeItem('github_username')
-    localStorage.removeItem('github_repository')
     localStorage.removeItem('github_token')
   }
 
   const fetchRepoTree = async () => {
-    if (!username.value || !repository.value) {
+    if (!username || !repository) {
       throw new Error('请先设置用户名和仓库名')
     }
 
@@ -50,7 +35,7 @@ export const useGithubStore = defineStore('github', () => {
 
     try {
       const response = await axios.get(
-        `https://api.github.com/repos/${username.value}/${repository.value}/git/trees/main?recursive=1`,
+        `https://api.github.com/repos/${username}/${repository}/git/trees/main?recursive=1`,
         { headers }
       )
 
@@ -74,7 +59,7 @@ export const useGithubStore = defineStore('github', () => {
 
   const createBlob = async (content: string) => {
     const response = await axios.post(
-      `https://api.github.com/repos/${username.value}/${repository.value}/git/blobs`,
+      `https://api.github.com/repos/${username}/${repository}/git/blobs`,
       { content, encoding: 'utf-8' },
       { headers: { Authorization: `token ${token.value}` } }
     )
@@ -83,7 +68,7 @@ export const useGithubStore = defineStore('github', () => {
 
   const getReference = async () => {
     const response = await axios.get(
-      `https://api.github.com/repos/${username.value}/${repository.value}/git/ref/heads/main`,
+      `https://api.github.com/repos/${username}/${repository}/git/ref/heads/main`,
       { headers: { Authorization: `token ${token.value}` } }
     )
     return {
@@ -94,7 +79,7 @@ export const useGithubStore = defineStore('github', () => {
 
   const createTree = async (baseTree: string, files: { path: string; sha: string; mode: string }[]) => {
     const response = await axios.post(
-      `https://api.github.com/repos/${username.value}/${repository.value}/git/trees`,
+      `https://api.github.com/repos/${username}/${repository}/git/trees`,
       {
         base_tree: baseTree,
         tree: files
@@ -106,7 +91,7 @@ export const useGithubStore = defineStore('github', () => {
 
   const createCommit = async (message: string, treeSha: string, parentSha: string) => {
     const response = await axios.post(
-      `https://api.github.com/repos/${username.value}/${repository.value}/git/commits`,
+      `https://api.github.com/repos/${username}/${repository}/git/commits`,
       {
         message,
         tree: treeSha,
@@ -124,7 +109,7 @@ export const useGithubStore = defineStore('github', () => {
 
   const updateReference = async (ref: string, sha: string) => {
     await axios.patch(
-      `https://api.github.com/repos/${username.value}/${repository.value}/git/${ref}`,
+      `https://api.github.com/repos/${username}/${repository}/git/${ref}`,
       { sha },
       { headers: { Authorization: `token ${token.value}` } }
     )
@@ -135,6 +120,9 @@ export const useGithubStore = defineStore('github', () => {
     content?: string;
     isDeleted?: boolean;
   }>) => {
+    if (isReadonly.value) {
+      throw new Error('当前处于只读模式，无法进行版本控制操作')
+    }
     try {
       await attemptCommit(message, changes)
       return true
@@ -205,19 +193,22 @@ export const useGithubStore = defineStore('github', () => {
   }
 
   const isConfigured = computed(() => {
-    return Boolean(username.value && repository.value && token.value)
+    return Boolean(username && repository)
+  })
+
+  const isReadonly = computed(() => {
+    return !token.value
   })
 
   return {
     username,
     repository,
     token,
-    setUsername,
-    setRepository,
     setToken,
     clearGithubData,
     fetchRepoTree,
     isConfigured,
+    isReadonly,
     commitAndPush
   }
 })
