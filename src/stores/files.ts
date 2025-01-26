@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import axios from 'axios'
+import { useGithubStore } from './github'  // Add this import
 
 export enum FileStatus {
   UNMODIFIED = 'unmodified',
@@ -82,37 +83,12 @@ export const useFileStore = defineStore('files', () => {
     return null
   }
 
-  // 获取GitHub上的文件内容
-  const fetchGithubContent = async (path: string) => {
-    const githubUsername = localStorage.getItem('github_username')
-    const githubRepo = localStorage.getItem('github_repository')
-    const token = localStorage.getItem('github_token')
-
-    const headers: Record<string, string> = {
-      'Accept': 'application/vnd.github.v3.raw'
-    }
-    
-    if (token) {
-      headers['Authorization'] = `token ${token}`
-    }
-
-    try {
-      const response = await axios.get(
-        `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${path}`,
-        { headers }
-      )
-      return typeof response.data === 'string' ? response.data : ''
-    } catch (error) {
-      console.error('获取GitHub文件内容失败:', error)
-      return null
-    }
-  }
-
   // 同步检查文件内容
   const syncFileContent = async (file: FileItem) => {
     if (file.type !== 'blob' || file.status === FileStatus.NEW) return
 
-    const githubContent = await fetchGithubContent(file.path)
+    const githubStore = useGithubStore()
+    const githubContent = await githubStore.fetchGithubContent(file.path)
     if (githubContent === null) return // 获取失败则不进行同步
 
     // 如果文件还没有加载过内容，直接使用GitHub的内容
@@ -159,7 +135,8 @@ export const useFileStore = defineStore('files', () => {
     file.content = '加载中...'
 
     try {
-      const githubContent = await fetchGithubContent(file.path)
+      const githubStore = useGithubStore()
+      const githubContent = await githubStore.fetchGithubContent(file.path)
       if (githubContent !== null) {
         file.content = githubContent
         if (callback) {

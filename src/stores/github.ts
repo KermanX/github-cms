@@ -192,6 +192,31 @@ export const useGithubStore = defineStore('github', () => {
     await updateReference(ref, newCommitSha)
   }
 
+  const fetchGithubContent = async (path: string) => {
+    if (!username || !repository) {
+      throw new Error('请先设置用户名和仓库名')
+    }
+
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github.v3.raw'
+    }
+    
+    if (token.value) {
+      headers['Authorization'] = `token ${token.value}`
+    }
+
+    try {
+      const response = await axios.get(
+        `https://api.github.com/repos/${username}/${repository}/contents/${path}`,
+        { headers }
+      )
+      return typeof response.data === 'string' ? response.data : ''
+    } catch (error) {
+      console.error('获取GitHub文件内容失败:', error)
+      return null
+    }
+  }
+
   const isConfigured = computed(() => {
     return Boolean(username && repository)
   })
@@ -209,6 +234,7 @@ export const useGithubStore = defineStore('github', () => {
     fetchRepoTree,
     isConfigured,
     isReadonly,
+    fetchGithubContent,
     commitAndPush
   }
 })
