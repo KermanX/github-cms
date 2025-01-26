@@ -136,51 +136,72 @@ export const useGithubStore = defineStore('github', () => {
     isDeleted?: boolean;
   }>) => {
     try {
-      // 1. 为所有修改的文件创建 blob
-      const blobPromises = changes
-        .filter(f => !f.isDeleted && f.content !== undefined)
-        .map(async file => ({
-          path: file.path,
-          sha: await createBlob(file.content!)
-        }))
-      
-      const blobs = await Promise.all(blobPromises)
-
-      // 2. 获取当前 reference
-      const { sha: parentSha, ref } = await getReference()
-
-      // 3. 创建新的 tree
-      const tree = changes.map(file => {
-        if (file.isDeleted) {
-          return {
-            path: file.path,
-            mode: '100644',
-            type: 'blob',
-            sha: null // 删除文件
-          }
+      await attemptCommit(message, changes)
+      return true
+    } catch (error: any) {
+      // 检查是否是需要先拉取的错误
+      if (error?.response?.data?.message?.includes('Update is not a fast-forward')) {
+        try {
+          // 先拉取最新代码
+          const fileStore = useFileStore()
+          await fileStore.syncAllFiles()
+          
+          // 重试提交
+          await attemptCommit(message, changes)
+          return true
+        } catch (retryError) {
+          console.error('Retry commit failed:', retryError)
+          throw retryError
         }
-        const blob = blobs.find(b => b.path === file.path)
+      }
+      throw error
+    }
+  }
+
+  const attemptCommit = async (message: string, changes: Array<{
+    path: string;
+    content?: string;
+    isDeleted?: boolean;
+  }>) => {
+    // 1. 为所有修改的文件创建 blob
+    const blobPromises = changes
+      .filter(f => !f.isDeleted && f.content !== undefined)
+      .map(async file => ({
+        path: file.path,
+        sha: await createBlob(file.content!)
+      }))
+    
+    const blobs = await Promise.all(blobPromises)
+
+    // 2. 获取当前 reference
+    const { sha: parentSha, ref } = await getReference()
+
+    // 3. 创建新的 tree
+    const tree = changes.map(file => {
+      if (file.isDeleted) {
         return {
           path: file.path,
           mode: '100644',
           type: 'blob',
-          sha: blob!.sha
+          sha: null
         }
-      })
+      }
+      const blob = blobs.find(b => b.path === file.path)
+      return {
+        path: file.path,
+        mode: '100644',
+        type: 'blob',
+        sha: blob!.sha
+      }
+    })
 
-      const newTreeSha = await createTree(parentSha, tree)
+    const newTreeSha = await createTree(parentSha, tree)
 
-      // 4. 创建 commit
-      const newCommitSha = await createCommit(message, newTreeSha, parentSha)
+    // 4. 创建 commit
+    const newCommitSha = await createCommit(message, newTreeSha, parentSha)
 
-      // 5. 更新 reference
-      await updateReference(ref, newCommitSha)
-
-      return true
-    } catch (error) {
-      console.error('Commit failed:', error)
-      throw error
-    }
+    // 5. 更新 reference
+    await updateReference(ref, newCommitSha)
   }
 
   const isConfigured = computed(() => {

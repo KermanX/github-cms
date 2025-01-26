@@ -73,6 +73,7 @@
 import { computed, ref, nextTick } from 'vue'
 import type { FileItem } from '../stores/files'
 import { useFileStore, FileStatus } from '../stores/files'
+import { useNotificationStore } from '../stores/notification'
 
 const props = defineProps<{
   item: FileItem
@@ -85,6 +86,7 @@ const emit = defineEmits<{
 
 const isExpanded = ref(true) // 默认展开
 const fileStore = useFileStore()
+const notificationStore = useNotificationStore()
 
 const isFolder = computed(() => props.item.type === 'tree')
 const isCurrentFile = computed(() => fileStore.currentFile?.id === props.item.id)
@@ -127,8 +129,15 @@ const statusText = computed(() => {
 })
 
 const handleDelete = () => {
-  if (confirm(`确定要删除 ${props.item.path} 吗？${props.item.type === 'tree' ? '\n注意：这将删除文件夹下的所有文件！' : ''}`)) {
-    fileStore.deleteFile(props.item.id)
-  }
+  notificationStore.showDialog({
+    title: '确认删除',
+    message: `确定要删除 ${props.item.path} 吗？${props.item.type === 'tree' ? '\n注意：这将删除文件夹下的所有文件！' : ''}`,
+    type: 'warning',
+    confirmText: '删除',
+    cancelText: '取消',
+    onConfirm: () => {
+      fileStore.deleteFile(props.item.id)
+    }
+  })
 }
 </script>

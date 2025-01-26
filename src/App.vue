@@ -25,6 +25,8 @@
         </div>
       </div>
     </template>
+    <Toast />
+    <Dialog />
   </div>
 </template>
 
@@ -38,6 +40,8 @@ import { useGithubStore } from './stores/github'
 import { useFileStore } from './stores/files'
 import { useLocalStorage } from '@vueuse/core'
 import ResizeHandle from './components/ResizeHandle.vue'
+import Toast from './components/ui/Toast.vue'
+import Dialog from './components/ui/Dialog.vue'
 
 const githubStore = useGithubStore()
 const fileStore = useFileStore()

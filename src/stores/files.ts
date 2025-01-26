@@ -63,8 +63,21 @@ export const useFileStore = defineStore('files', () => {
   }
 
   const setFocusedItem = (item: FileItem) => {
-    console.log(item.id)
     focusedItem.value = item
+    // 保存焦点项路径
+    localStorage.setItem('focused_item_path', item.path)
+  }
+
+  const restoreFocusedItem = () => {
+    const savedPath = localStorage.getItem('focused_item_path')
+    if (savedPath) {
+      const item = files.value.find(f => f.path === savedPath)
+      if (item) {
+        focusedItem.value = item
+        return item
+      }
+    }
+    return null
   }
 
   // 获取GitHub上的文件内容
@@ -258,14 +271,25 @@ export const useFileStore = defineStore('files', () => {
     files.value.push(newFile as FileItem)
   }
 
+  const getParentPath = (path: string) => {
+    const parts = path.split('/')
+    return parts.slice(0, -1).join('/')
+  }
+
+  const normalizeFilePath = (path: string) => {
+    // Remove leading/trailing slashes and normalize multiple slashes
+    return path.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/')
+  }
+
   const createFile = (path: string, content: string = '', type: 'blob' | 'tree' = 'blob') => {
+    const normalizedPath = normalizeFilePath(path)
     const newFile: FileItem = {
       id: Math.max(...files.value.map(f => f.id), 0) + 1,
-      name: path.split('/').pop() || '',
-      path,
+      name: normalizedPath.split('/').pop() || '',
+      path: normalizedPath,
       type,
       sha: '',
-      content: type === 'blob' ? '' : undefined,  // 确保新文件有空字符串作为内容
+      content: type === 'blob' ? content : undefined,
       isDirty: true,
       status: FileStatus.NEW
     }
@@ -309,11 +333,16 @@ export const useFileStore = defineStore('files', () => {
 
   const getModifiedFiles = () => {
     return files.value.filter(file => 
-      file.status === FileStatus.MODIFIED || 
-      file.status === FileStatus.NEW || 
-      file.status === FileStatus.DELETED
-    ).sort((a, b) => {
-      // 排序：新建 -> 修改 -> 删除
+      // 只返回文件类型(blob)且有修改状态的项目
+      file.type === 'blob' && (
+        file.status === FileStatus.MODIFIED || 
+        file.status === FileStatus.NEW || 
+        file.status === FileStatus.DELETED
+      )
+    ).map(file => ({
+      ...file,
+      path: normalizeFilePath(file.path)
+    })).sort((a, b) => {
       const statusOrder = {
         [FileStatus.NEW]: 0,
         [FileStatus.MODIFIED]: 1,
@@ -321,6 +350,25 @@ export const useFileStore = defineStore('files', () => {
       }
       return (statusOrder[a.status!] || 0) - (statusOrder[b.status!] || 0)
     })
+  }
+
+  const updateFileOriginalContent = () => {
+    files.value.forEach(file => {
+      if (file.content) {
+        file.originalContent = undefined
+        file.isDirty = false
+        file.status = FileStatus.UNMODIFIED
+      }
+    })
+    persistFiles()
+  }
+
+  const syncAllFiles = async () => {
+    const blobFiles = files.value.filter(f => f.type === 'blob')
+    for (const file of blobFiles) {
+      await syncFileContent(file)
+    }
+    persistFiles()
   }
 
   return {
@@ -344,5 +392,8 @@ export const useFileStore = defineStore('files', () => {
     persistFiles,
     loadPersistedFiles,
     syncFileContent,   // 新增
+    updateFileOriginalContent,
+    syncAllFiles,
+    restoreFocusedItem, // 新增
   }
 })

@@ -74,13 +74,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useFileStore, FileStatus, FileItem } from '../stores/files'
 import { useGithubStore } from '../stores/github'
+import { useNotificationStore } from '../stores/notification'
 
 const fileStore = useFileStore()
 const githubStore = useGithubStore()
-const commitMessage = ref('')
+const notificationStore = useNotificationStore()
+
+const COMMIT_MESSAGE_KEY = 'draft_commit_message'
+const commitMessage = ref(localStorage.getItem(COMMIT_MESSAGE_KEY) || '')
+
+// 监听提交信息变化，保存到localStorage
+watch(commitMessage, (newValue) => {
+  localStorage.setItem(COMMIT_MESSAGE_KEY, newValue)
+})
 
 const modifiedFiles = computed(() => fileStore.getModifiedFiles())
 const hasModifiedFiles = computed(() => modifiedFiles.value.length > 0)
@@ -99,14 +108,20 @@ const getStatusText = (status?: FileStatus) => {
 }
 
 const handleRevert = (file: FileItem) => {
-  if (confirm(`确定要撤销对 ${file.path} 的修改吗？`)) {
-    fileStore.revertFile(file.id)
-  }
+  notificationStore.showDialog({
+    title: '确认撤销',
+    message: `确定要撤销对 ${file.path} 的修改吗？`,
+    type: 'warning',
+    onConfirm: () => fileStore.revertFile(file.id)
+  })
 }
 
 const handleCommit = async () => {
   if (!commitMessage.value.trim()) {
-    alert('Please enter a commit message')
+    notificationStore.showToast({
+      message: 'Please enter a commit message',
+      type: 'warning'
+    })
     return
   }
 
@@ -117,21 +132,48 @@ const handleCommit = async () => {
       isDeleted: file.isDeleted
     }))
 
-    // 格式化提交信息，添加作者信息
     const fullMessage = `${commitMessage.value}\n\nBy: ${githubStore.username}`
+
+    // 显示提交中的状态
+    notificationStore.showToast({
+      message: 'Committing changes...',
+      type: 'info',
+      duration: 0
+    })
 
     await githubStore.commitAndPush(fullMessage, changes)
 
-    // 重新加载文件树
-    await githubStore.fetchRepoTree()
+    // 提交成功后，更新所有文件的原始内容
+    fileStore.updateFileOriginalContent()
     
-    // 清空提交信息
+    // 提交成功后清除保存的草稿
+    localStorage.removeItem(COMMIT_MESSAGE_KEY)
     commitMessage.value = ''
     
-    alert('Changes committed successfully!')
-  } catch (error) {
+    notificationStore.showToast({
+      message: 'Changes committed successfully!',
+      type: 'success'
+    })
+  } catch (error: any) {
     console.error('Commit failed:', error)
-    alert('Failed to commit changes. Please try again.')
+    
+    // 根据错误类型显示不同的消息
+    const errorMessage = error?.response?.data?.message?.includes('Update is not a fast-forward')
+      ? 'Merge conflict detected. Please try again.'
+      : 'Failed to commit changes. Please try again.'
+
+    notificationStore.showToast({
+      message: errorMessage,
+      type: 'error',
+      duration: 5000
+    })
+
+    // 尝试同步远程内容
+    try {
+      await fileStore.syncAllFiles()
+    } catch (syncError) {
+      console.error('Sync failed:', syncError)
+    }
   }
 }
 </script>

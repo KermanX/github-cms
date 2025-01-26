@@ -60,7 +60,6 @@ onMounted(async () => {
 
 // 修改内容监听，避免循环更新
 watch(() => props.content, (newContent) => {
-  console.log('Editor content updating to:', newContent) // 调试日志
   if (editor) {
     const currentContent = editor.getValue()
     // 只有当内容真的不同时才更新

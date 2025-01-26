@@ -83,9 +83,11 @@ import { useFileStore } from '../stores/files'
 import { useGithubStore } from '../stores/github'
 import type { FileItem } from '../stores/files'
 import TreeItem from './TreeItem.vue'
+import { useNotificationStore } from '../stores/notification'
 
 const fileStore = useFileStore()
 const githubStore = useGithubStore()
+const notificationStore = useNotificationStore()
 
 const props = defineProps<{
   onSelect?: (content: string) => void
@@ -101,19 +103,60 @@ const startCreatingFolder = async () => {
   newFolderInput.value?.focus()
 }
 
+const isPathConflict = (path: string) => {
+  return fileStore.files.some(file => 
+    file.path.toLowerCase() === path.toLowerCase() && 
+    !file.isDeleted
+  )
+}
+
+const getConflictMessage = (path: string, type: 'file' | 'folder') => {
+  const name = path.split('/').pop()
+  return `已存在同名${type === 'file' ? '文件' : '文件夹'} "${name}"`
+}
+
+const getTargetPath = (fileName: string) => {
+  if (!fileStore.focusedItem) {
+    return fileName
+  }
+
+  if (fileStore.focusedItem.type === 'tree') {
+    // If focused on a folder, create inside it
+    return `${fileStore.focusedItem.path}/${fileName}`
+  } else {
+    // If focused on a file, create next to it
+    const parentPath = fileStore.focusedItem.path.split('/').slice(0, -1).join('/')
+    return parentPath ? `${parentPath}/${fileName}` : fileName
+  }
+}
+
 const createFolder = () => {
   if (!newFolderName.value) return
   
-  let basePath = ''
-  if (fileStore.focusedItem) {
-    basePath = fileStore.focusedItem.type === 'tree' 
-      ? fileStore.focusedItem.path + '/'
-      : fileStore.focusedItem.path.split('/').slice(0, -1).join('/') + '/'
+  const fullPath = getTargetPath(newFolderName.value)
+  
+  if (isPathConflict(fullPath)) {
+    notificationStore.showToast({
+      message: getConflictMessage(fullPath, 'folder'),
+      type: 'error'
+    })
+    return
   }
 
-  const fullPath = basePath + newFolderName.value
+  // 确保创建所有必要的父文件夹
+  const pathParts = fullPath.split('/')
+  let currentPath = ''
+  
+  for (let i = 0; i < pathParts.length - 1; i++) {
+    currentPath = currentPath ? `${currentPath}/${pathParts[i]}` : pathParts[i]
+    if (!fileStore.files.some(f => f.path === currentPath && f.type === 'tree')) {
+      fileStore.createFile(currentPath, '', 'tree')
+    }
+  }
+
   const newFolder = fileStore.createFile(fullPath, '', 'tree')
   fileStore.setFocusedItem(newFolder)
+  fileStore.persistFiles() // 确保保存更改
   
   isCreatingFolder.value = false
   newFolderName.value = ''
@@ -137,16 +180,30 @@ const startCreatingFile = async () => {
 const createFile = () => {
   if (!newFileName.value) return
   
-  let basePath = ''
-  if (fileStore.focusedItem) {
-    basePath = fileStore.focusedItem.type === 'tree'
-      ? fileStore.focusedItem.path + '/'
-      : fileStore.focusedItem.path.split('/').slice(0, -1).join('/') + '/'
+  const fullPath = getTargetPath(newFileName.value)
+
+  if (isPathConflict(fullPath)) {
+    notificationStore.showToast({
+      message: getConflictMessage(fullPath, 'file'),
+      type: 'error'
+    })
+    return
   }
 
-  const fullPath = basePath + newFileName.value
+  // 确保创建所有必要的父文件夹
+  const pathParts = fullPath.split('/')
+  let currentPath = ''
+  
+  for (let i = 0; i < pathParts.length - 1; i++) {
+    currentPath = currentPath ? `${currentPath}/${pathParts[i]}` : pathParts[i]
+    if (!fileStore.files.some(f => f.path === currentPath && f.type === 'tree')) {
+      fileStore.createFile(currentPath, '', 'tree')
+    }
+  }
+
   const newFile = fileStore.createFile(fullPath)
   fileStore.selectFile(newFile)
+  fileStore.persistFiles() // 确保保存更改
   
   if (props.onSelect) {
     props.onSelect('')
@@ -161,9 +218,64 @@ const cancelCreatingFile = () => {
   newFileName.value = ''
 }
 
-// 获取根级文件和文件夹
+// 修改获取根级文件和文件夹的方法
+const buildFileTree = (files: FileItem[]) => {
+  const allFiles = [...files].filter(f => !f.isDeleted) // 过滤掉已删除的文件
+  
+  // 首先按路径长度排序，确保父文件夹在子文件之前处理
+  allFiles.sort((a, b) => {
+    const aDepth = a.path.split('/').length
+    const bDepth = b.path.split('/').length
+    return aDepth - bDepth
+  })
+
+  // 清除所有现有的子节点关系
+  allFiles.forEach(file => {
+    file.children = undefined
+  })
+
+  // 重新建立父子关系
+  allFiles.forEach(file => {
+    const parentPath = file.path.split('/').slice(0, -1).join('/')
+    if (parentPath) {
+      const parent = allFiles.find(f => f.path === parentPath && f.type === 'tree')
+      if (parent) {
+        if (!parent.children) {
+          parent.children = []
+        }
+        parent.children.push(file)
+      }
+    }
+  })
+
+  // 对每个层级的文件进行排序
+  const sortFiles = (items: FileItem[]) => {
+    items.sort((a, b) => {
+      // 文件夹优先
+      if (a.type !== b.type) {
+        return a.type === 'tree' ? -1 : 1
+      }
+      // 按名称排序
+      return a.name.localeCompare(b.name)
+    })
+    
+    // 递归排序子文件夹
+    items.forEach(item => {
+      if (item.children) {
+        sortFiles(item.children)
+      }
+    })
+  }
+
+  // 只返回根级文件和文件夹
+  const rootFiles = allFiles.filter(file => !file.path.includes('/'))
+  sortFiles(rootFiles)
+  return rootFiles
+}
+
+// 修改 rootFiles 计算属性
 const rootFiles = computed(() => {
-  return fileStore.files.filter(f => !f.path.includes('/'))
+  return buildFileTree(fileStore.files)
 })
 
 onMounted(async () => {
@@ -176,10 +288,25 @@ onMounted(async () => {
       await githubStore.fetchRepoTree()
     }
     
-    // 如果有当前文件，自动加载其内容
+    // 恢复焦点项
+    const focusedItem = fileStore.restoreFocusedItem()
+    
+    // 按优先级选择要加载的文件：
+    // 1. 上次打开的文件
+    // 2. README.md
     const currentFile = fileStore.currentFile
-    if (currentFile && currentFile.type === 'blob') {
+    if (currentFile?.type === 'blob') {
       handleFileSelect(currentFile)
+    } else if (focusedItem?.type === 'blob') {
+      handleFileSelect(focusedItem)
+    } else {
+      // 查找 README.md
+      const readmeFile = fileStore.files.find(f => 
+        f.name.toLowerCase() === 'readme.md' && f.type === 'blob'
+      )
+      if (readmeFile) {
+        handleFileSelect(readmeFile)
+      }
     }
   } catch (error) {
     console.error('加载文件树失败:', error)
