@@ -4,8 +4,18 @@
       <div class="i-carbon-logo-github text-xl dark:text-gray-200" />
       <span class="font-medium dark:text-gray-200">{{ githubStore.username }}</span>
       <span class="text-gray-500 dark:text-gray-400">/</span>
-      <div class="i-carbon-repository text-xl dark:text-gray-200" />
-      <span class="font-medium dark:text-gray-200">{{ githubStore.repository }}</span>
+      <a 
+        :href="repoUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center gap-1 text-gray-700 dark:text-gray-200 hover:text-blue-600 
+               dark:hover:text-blue-400 transition-colors group"
+      >
+        <div class="i-carbon-repository text-xl transition-transform group-hover:-rotate-12" />
+        <span class="font-medium">{{ githubStore.repository }}</span>
+        <div class="i-carbon-arrow-up-right text-sm opacity-0 group-hover:opacity-100 
+                    transition-opacity -ml-0.5 mt-0.5" />
+      </a>
     </div>
     <div class="flex items-center space-x-4">
       <button
@@ -28,8 +38,13 @@
 <script setup lang="ts">
 import { useGithubStore } from '../stores/github'
 import { useDark, useToggle } from '@vueuse/core'
+import { computed } from 'vue'
 
 const isDark = useDark()
 const toggleDark = useToggle(isDark)
 const githubStore = useGithubStore()
+
+const repoUrl = computed(() => 
+  `https://github.com/${githubStore.username}/${githubStore.repository}`
+)
 </script>

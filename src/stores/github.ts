@@ -72,6 +72,117 @@ export const useGithubStore = defineStore('github', () => {
     }
   }
 
+  const createBlob = async (content: string) => {
+    const response = await axios.post(
+      `https://api.github.com/repos/${username.value}/${repository.value}/git/blobs`,
+      { content, encoding: 'utf-8' },
+      { headers: { Authorization: `token ${token.value}` } }
+    )
+    return response.data.sha
+  }
+
+  const getReference = async () => {
+    const response = await axios.get(
+      `https://api.github.com/repos/${username.value}/${repository.value}/git/ref/heads/main`,
+      { headers: { Authorization: `token ${token.value}` } }
+    )
+    return {
+      sha: response.data.object.sha,
+      ref: response.data.ref
+    }
+  }
+
+  const createTree = async (baseTree: string, files: { path: string; sha: string; mode: string }[]) => {
+    const response = await axios.post(
+      `https://api.github.com/repos/${username.value}/${repository.value}/git/trees`,
+      {
+        base_tree: baseTree,
+        tree: files
+      },
+      { headers: { Authorization: `token ${token.value}` } }
+    )
+    return response.data.sha
+  }
+
+  const createCommit = async (message: string, treeSha: string, parentSha: string) => {
+    const response = await axios.post(
+      `https://api.github.com/repos/${username.value}/${repository.value}/git/commits`,
+      {
+        message,
+        tree: treeSha,
+        parents: [parentSha],
+        author: {
+          name: 'GitHub-CMS',
+          email: 'github-cms@noreply.github.com',
+          date: new Date().toISOString()
+        }
+      },
+      { headers: { Authorization: `token ${token.value}` } }
+    )
+    return response.data.sha
+  }
+
+  const updateReference = async (ref: string, sha: string) => {
+    await axios.patch(
+      `https://api.github.com/repos/${username.value}/${repository.value}/git/${ref}`,
+      { sha },
+      { headers: { Authorization: `token ${token.value}` } }
+    )
+  }
+
+  const commitAndPush = async (message: string, changes: Array<{
+    path: string;
+    content?: string;
+    isDeleted?: boolean;
+  }>) => {
+    try {
+      // 1. 为所有修改的文件创建 blob
+      const blobPromises = changes
+        .filter(f => !f.isDeleted && f.content !== undefined)
+        .map(async file => ({
+          path: file.path,
+          sha: await createBlob(file.content!)
+        }))
+      
+      const blobs = await Promise.all(blobPromises)
+
+      // 2. 获取当前 reference
+      const { sha: parentSha, ref } = await getReference()
+
+      // 3. 创建新的 tree
+      const tree = changes.map(file => {
+        if (file.isDeleted) {
+          return {
+            path: file.path,
+            mode: '100644',
+            type: 'blob',
+            sha: null // 删除文件
+          }
+        }
+        const blob = blobs.find(b => b.path === file.path)
+        return {
+          path: file.path,
+          mode: '100644',
+          type: 'blob',
+          sha: blob!.sha
+        }
+      })
+
+      const newTreeSha = await createTree(parentSha, tree)
+
+      // 4. 创建 commit
+      const newCommitSha = await createCommit(message, newTreeSha, parentSha)
+
+      // 5. 更新 reference
+      await updateReference(ref, newCommitSha)
+
+      return true
+    } catch (error) {
+      console.error('Commit failed:', error)
+      throw error
+    }
+  }
+
   const isConfigured = computed(() => {
     return Boolean(username.value && repository.value && token.value)
   })
@@ -85,6 +196,7 @@ export const useGithubStore = defineStore('github', () => {
     setToken,
     clearGithubData,
     fetchRepoTree,
-    isConfigured
+    isConfigured,
+    commitAndPush
   }
 })

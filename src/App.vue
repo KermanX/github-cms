@@ -4,9 +4,8 @@
       <div class="h-full flex flex-col">
         <Header class="border-b" />
         <div class="flex flex-1">
-          <div class="relative" :style="{ width: `${sidebarWidth}px`, flexShrink: 0 }">
+          <div class="relative border-r dark:border-gray-700" :style="{ width: `${sidebarWidth}px`, flexShrink: 0 }">
             <FileTree 
-              class="h-full border-r dark:border-gray-700"
               :onSelect="handleSelect"
             />
             <ResizeHandle @resize="handleResize" />
