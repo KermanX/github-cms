@@ -29,6 +29,7 @@ export const useFileStore = defineStore('files', () => {
   const currentFile = ref<FileItem | null>(null)
   const focusedItem = ref<FileItem | null>(null)  // 替换 currentFolder
   const showDiff = ref(false)
+  const isPreviewMode = ref(false)
 
   // 从 localStorage 恢复当前文件
   const restoreCurrentFile = () => {
@@ -443,6 +444,10 @@ export const useFileStore = defineStore('files', () => {
     }
   }
 
+  const togglePreviewMode = () => {
+    isPreviewMode.value = !isPreviewMode.value
+  }
+
   return {
     files,
     currentFile,
@@ -471,5 +476,7 @@ export const useFileStore = defineStore('files', () => {
     showDiff,
     setShowDiff,
     setCurrentFile,
+    isPreviewMode,
+    togglePreviewMode
   }
 })

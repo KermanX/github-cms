@@ -17,7 +17,12 @@
             />
           </template>
           <template v-else>
+            <MarkdownPreview 
+              v-show="fileStore.isPreviewMode && canPreview"
+              :content="fileStore.currentFile?.content || ''" 
+            />
             <Editor 
+              v-show="!(fileStore.isPreviewMode && canPreview)"
               :content="fileStore.currentFile?.content || ''"
               @change="handleEditorChange"
             />
@@ -34,7 +39,7 @@
 import FileTree from './components/FileTree.vue'
 import Editor from './components/Editor.vue'
 import Header from './components/Header.vue'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { onMounted } from 'vue'
 import { useDark } from '@vueuse/core'
 import { useGithubStore } from './stores/github'
@@ -44,6 +49,7 @@ import ResizeHandle from './components/ResizeHandle.vue'
 import Toast from './components/ui/Toast.vue'
 import Dialog from './components/ui/Dialog.vue'
 import DiffEditor from './components/DiffEditor.vue'
+import MarkdownPreview from './components/MarkdownPreview.vue'
 
 useDark()
 const githubStore = useGithubStore()
@@ -68,6 +74,11 @@ const handleEditorChange = (content: string) => {
     fileStore.updateFileContent(fileStore.currentFile.id, content)
   }
 }
+
+const canPreview = computed(() => {
+  const path = fileStore.currentFile?.path || ''
+  return path.endsWith('.md') || path.endsWith('.mdx')
+})
 </script>
 
 <style>

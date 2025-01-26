@@ -1,5 +1,8 @@
 <template>
-  <header class="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b dark:border-gray-700">
+  <header
+    class="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b dark:border-gray-700"
+    v-bind="$attrs"
+  >
     <div class="flex items-center space-x-2">
       <div class="i-carbon-logo-github text-xl dark:text-gray-200" />
       <span class="font-medium dark:text-gray-200">{{ githubStore.username }}</span>
@@ -30,6 +33,24 @@
         <div class="i-carbon-view" />
         <span class="text-sm">只读模式</span>
       </button>
+      
+      <!-- Preview Toggle Switch -->
+      <div v-if="!githubStore.isReadonly && showPreviewToggle" 
+           class="flex items-center gap-2">
+        <button
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors duration-200"
+          :class="[
+            fileStore.isPreviewMode 
+              ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400'
+              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+          ]"
+          @click="togglePreview"
+        >
+          <div :class="fileStore.isPreviewMode ? 'i-carbon-play' : 'i-carbon-code'" />
+          <span class="text-sm">{{ fileStore.isPreviewMode ? '预览' : '编辑' }}</span>
+        </button>
+      </div>
+
       <button
         @click="toggleDark()"
         class="p-2 rounded-lg transition-colors duration-200 hover:bg-gray-200 dark:hover:bg-gray-700"
@@ -75,12 +96,14 @@
 
 <script setup lang="ts">
 import { useGithubStore } from '../stores/github'
+import { useFileStore } from '../stores/files'
 import { useDark, useToggle } from '@vueuse/core'
 import { computed, ref } from 'vue'
 
 const isDark = useDark()
 const toggleDark = useToggle(isDark)
 const githubStore = useGithubStore()
+const fileStore = useFileStore()
 
 const repoUrl = computed(() => 
   `https://github.com/${githubStore.username}/${githubStore.repository}`
@@ -99,5 +122,14 @@ const handleConfirm = () => {
     showModal.value = false
     inputToken.value = ''
   }
+}
+
+const showPreviewToggle = computed(() => {
+  const path = fileStore.currentFile?.path || ''
+  return path.endsWith('.md') || path.endsWith('.mdx')
+})
+
+const togglePreview = () => {
+  fileStore.togglePreviewMode()
 }
 </script>

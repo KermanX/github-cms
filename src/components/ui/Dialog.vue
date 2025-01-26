@@ -1,5 +1,5 @@
 <template>
-  <TransitionRoot appear :show="!notificationStore.dialog?.hidden" as="div">
+  <TransitionRoot appear :show="!!notificationStore.dialog && !notificationStore.dialog.hidden" as="div">
     <Dialog as="div" @close="handleClose" class="relative z-50">
       <TransitionChild
         as="div"

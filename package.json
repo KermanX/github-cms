@@ -11,6 +11,8 @@
     "@shikijs/monaco": "^2.1.0",
     "@vueuse/core": "^12.5.0",
     "axios": "^1.7.9",
+    "github-markdown-css": "^5.8.1",
+    "markdown-it": "^14.1.0",
     "monaco-editor": "^0.34.1",
     "pinia": "^2.3.1",
     "shiki": "^2.1.0",
