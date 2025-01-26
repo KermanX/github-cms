@@ -4,6 +4,16 @@
       <div class="flex justify-between items-center mb-3">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Changes</h3>
         <div class="flex gap-2">
+          <!-- 添加撤回所有按钮 -->
+          <button 
+            v-if="hasModifiedFiles"
+            class="p-1.5 rounded text-gray-600 dark:text-gray-400 transition-colors
+                   hover:bg-gray-200/30 dark:hover:bg-gray-700/30"
+            title="Revert all changes"
+            @click="handleRevertAll"
+          >
+            <div class="i-carbon-reset" />
+          </button>
           <button 
             class="p-1.5 rounded text-gray-600 dark:text-gray-400 transition-colors
                    hover:bg-gray-200/30 dark:hover:bg-gray-700/30 disabled:opacity-50"
@@ -24,6 +34,7 @@
                dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200
                disabled:opacity-50 disabled:cursor-not-allowed"
         placeholder="Enter commit message"
+        @keydown.ctrl.enter="handleCommit"
       />
     </div>
 
@@ -33,7 +44,8 @@
         <div 
           v-for="file in modifiedFiles" 
           :key="file.id"
-          class="flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-gray-700/30 rounded group"
+          class="flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-gray-700/30 rounded group cursor-pointer"
+          @click="handleEditDiff(file)"
         >
           <div class="flex items-center gap-2 min-w-0">
             <!-- 文件状态标记 -->
@@ -52,15 +64,25 @@
             </span>
           </div>
 
-          <!-- 操作按钮 -->
-          <button 
-            class="opacity-0 group-hover:opacity-100 p-1 rounded text-gray-500 
-                   hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-            @click="handleRevert(file)"
-            title="Revert changes"
-          >
-            <div class="i-carbon-undo text-sm" />
-          </button>
+          <!-- 操作按钮组 -->
+          <div class="opacity-0 group-hover:opacity-100 flex gap-1">
+            <!-- 普通编辑按钮 -->
+            <button 
+              class="p-1 rounded text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+              @click.stop="handleEditNormal(file)"
+              title="Edit in normal mode"
+            >
+              <div class="i-carbon-edit text-sm" />
+            </button>
+            <!-- 撤销按钮 -->
+            <button 
+              class="p-1 rounded text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+              @click.stop="handleRevert(file)"
+              title="Revert changes"
+            >
+              <div class="i-carbon-undo text-sm" />
+            </button>
+          </div>
         </div>
       </template>
       
@@ -142,6 +164,7 @@ const handleCommit = async () => {
     })
 
     await githubStore.commitAndPush(fullMessage, changes)
+    await githubStore.updateLastCommitSha() // 更新最新的SHA
 
     // 提交成功后，更新所有文件的原始内容
     fileStore.updateFileOriginalContent()
@@ -157,10 +180,13 @@ const handleCommit = async () => {
   } catch (error: any) {
     console.error('Commit failed:', error)
     
-    // 根据错误类型显示不同的消息
-    const errorMessage = error?.response?.data?.message?.includes('Update is not a fast-forward')
-      ? 'Merge conflict detected. Please try again.'
-      : 'Failed to commit changes. Please try again.'
+    let errorMessage = 'Failed to commit changes. Please try again.'
+    
+    if (error.message === 'Remote repository has been updated. Please sync first.') {
+      errorMessage = 'Remote changes detected. Please sync your workspace first.'
+    } else if (error?.response?.data?.message?.includes('Update is not a fast-forward')) {
+      errorMessage = 'Merge conflict detected. Please sync your workspace first.'
+    }
 
     notificationStore.showToast({
       message: errorMessage,
@@ -168,12 +194,42 @@ const handleCommit = async () => {
       duration: 5000
     })
 
-    // 尝试同步远程内容
-    try {
-      await fileStore.syncAllFiles()
-    } catch (syncError) {
-      console.error('Sync failed:', syncError)
+    // 如果检测到远程更改，尝试同步
+    if (error.message.includes('sync')) {
+      try {
+        await fileStore.syncAllFiles()
+        await githubStore.updateLastCommitSha()
+      } catch (syncError) {
+        console.error('Sync failed:', syncError)
+      }
     }
   }
+}
+
+const handleRevertAll = () => {
+  notificationStore.showDialog({
+    title: '确认撤销所有修改',
+    message: '确定要撤销所有未提交的修改吗？此操作无法撤销。',
+    type: 'warning',
+    onConfirm: () => {
+      fileStore.revertAllFiles()
+      commitMessage.value = '' // 清空提交消息
+      localStorage.removeItem(COMMIT_MESSAGE_KEY) // 清除保存的草稿
+      notificationStore.showToast({
+        message: 'All changes have been reverted',
+        type: 'success'
+      })
+    }
+  })
+}
+
+const handleEditDiff = (file: FileItem) => {
+  fileStore.setCurrentFile(file.id)
+  fileStore.setShowDiff(true)
+}
+
+const handleEditNormal = (file: FileItem) => {
+  fileStore.setCurrentFile(file.id)
+  fileStore.setShowDiff(false)
 }
 </script>

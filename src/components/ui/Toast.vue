@@ -2,7 +2,7 @@
   <TransitionRoot
     appear
     :show="!!notificationStore.toast"
-    as="template"
+    as="div"
     enter="transform duration-300"
     enter-from="translate-y-2 opacity-0"
     enter-to="translate-y-0 opacity-100"

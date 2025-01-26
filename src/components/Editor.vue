@@ -7,13 +7,17 @@
 <script setup lang="ts">
 import * as monaco from 'monaco-editor'
 import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue'
-import { useFileStore } from '../stores/files.ts'
+import { useFileStore } from '../stores/files'
 import { useDark } from '@vueuse/core'
-import { setupMonaco } from '../utils/setupMonaco.ts'
-import { getLanguageFromFileName } from '../utils/languageMap.ts'
+import { setupMonaco } from '../utils/setupMonaco'
+import { getLanguageFromFileName } from '../utils/languageMap'
 
 const props = defineProps<{
   content: string
+}>()
+
+const emit = defineEmits<{
+  (e: 'change', content: string): void
 }>()
 
 const fileStore = useFileStore()
@@ -50,9 +54,8 @@ onMounted(async () => {
 
     // 监听编辑器内容变化
     editor.onDidChangeModelContent(() => {
-      if (editor && fileStore.currentFile) {
-        const content = editor.getValue()
-        fileStore.updateFileContent(fileStore.currentFile.id, content)
+      if (editor) {
+        emit('change', editor.getValue())
       }
     })
   }

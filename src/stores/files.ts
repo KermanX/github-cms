@@ -28,6 +28,7 @@ export const useFileStore = defineStore('files', () => {
   const files = ref<FileItem[]>([])
   const currentFile = ref<FileItem | null>(null)
   const focusedItem = ref<FileItem | null>(null)  // 替换 currentFolder
+  const showDiff = ref(false)
 
   // 从 localStorage 恢复当前文件
   const restoreCurrentFile = () => {
@@ -300,7 +301,27 @@ export const useFileStore = defineStore('files', () => {
 
   const deleteFile = (fileId: number) => {
     const file = files.value.find(f => f.id === fileId)
-    if (file) {
+    if (!file) return
+  
+    // 如果是文件夹，递归删除所有子文件和子文件夹
+    if (file.type === 'tree') {
+      const deletePath = file.path
+      // 找出所有以此路径开头的文件和文件夹
+      files.value.forEach(f => {
+        if (f.path === deletePath || f.path.startsWith(deletePath + '/')) {
+          if (f.status === FileStatus.NEW) {
+            // 新建的文件直接移除
+            files.value = files.value.filter(item => item.id !== f.id)
+          } else {
+            // 已存在的文件标记为删除
+            f.isDeleted = true
+            f.isDirty = true
+            f.status = FileStatus.DELETED
+          }
+        }
+      })
+    } else {
+      // 单个文件的删除逻辑
       if (file.status === FileStatus.NEW) {
         // 如果是新建的文件，直接移除
         files.value = files.value.filter(f => f.id !== fileId)
@@ -310,8 +331,9 @@ export const useFileStore = defineStore('files', () => {
         file.isDirty = true
         file.status = FileStatus.DELETED
       }
-      persistFiles() // 保存更改
     }
+    
+    persistFiles() // 保存更改
   }
 
   const revertFile = (fileId: number) => {
@@ -354,10 +376,19 @@ export const useFileStore = defineStore('files', () => {
 
   const updateFileOriginalContent = () => {
     files.value.forEach(file => {
-      if (file.content) {
-        file.originalContent = undefined
-        file.isDirty = false
+      if (file.status === FileStatus.NEW) {
+        // 新文件提交后应该变为未修改状态
         file.status = FileStatus.UNMODIFIED
+        file.isDirty = false
+        file.originalContent = file.content
+      } else if (file.status === FileStatus.MODIFIED) {
+        // 修改的文件提交后，更新原始内容
+        file.status = FileStatus.UNMODIFIED
+        file.isDirty = false
+        file.originalContent = file.content
+      } else if (file.status === FileStatus.DELETED) {
+        // 删除的文件提交后应该从列表中移除
+        files.value = files.value.filter(f => f.id !== file.id)
       }
     })
     persistFiles()
@@ -369,6 +400,47 @@ export const useFileStore = defineStore('files', () => {
       await syncFileContent(file)
     }
     persistFiles()
+  }
+
+  const revertAllFiles = () => {
+    // 获取所有已修改的文件
+    const modifiedFiles = getModifiedFiles()
+    
+    modifiedFiles.forEach(file => {
+      if (file.status === FileStatus.NEW) {
+        // 新文件直接从列表中移除
+        files.value = files.value.filter(f => f.id !== file.id)
+      } else {
+        // 恢复原始内容
+        const originalFile = files.value.find(f => f.id === file.id)
+        if (originalFile) {
+          originalFile.content = originalFile.originalContent
+          originalFile.originalContent = undefined
+          originalFile.isDirty = false
+          originalFile.status = FileStatus.UNMODIFIED
+          originalFile.isDeleted = false
+        }
+      }
+    })
+    
+    persistFiles() // 保存更改
+  }
+
+  const setShowDiff = (value: boolean) => {
+    showDiff.value = value
+  }
+
+  const setCurrentFile = (fileId: number | null) => {
+    if (fileId === null) {
+      currentFile.value = null
+      return
+    }
+    const file = files.value.find(f => f.id === fileId)
+    if (file) {
+      currentFile.value = file
+      focusedItem.value = file
+      localStorage.setItem('current_file_path', file.path)
+    }
   }
 
   return {
@@ -395,5 +467,9 @@ export const useFileStore = defineStore('files', () => {
     updateFileOriginalContent,
     syncAllFiles,
     restoreFocusedItem, // 新增
+    revertAllFiles, // 添加到返回对象
+    showDiff,
+    setShowDiff,
+    setCurrentFile,
   }
 })
